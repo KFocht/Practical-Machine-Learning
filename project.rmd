@@ -1,0 +1,106 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+---
+
+##Introduction
+For this project, we were given information from accelerometers on the belt, forearm,
+arm, and dumbbell of 6 participants.  These participants were to perform barbell lifts
+correctly and incorrectly 5 different ways.  The goal of the analysis was to determine
+which of those 5 ways the participant was performing the task using the information
+given by the accelerometers.
+
+##Loading the Data and Necessary Packages
+
+```{r}
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+              destfile = "training.csv")
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+              destfile = 'testing.csv')
+traindata <- read.csv("training.csv")
+testdata <- read.csv('testing.csv')
+library(caret)
+library(rattle)
+library(rpart.plot)
+```
+
+##Processing the Data
+The first step in the process was to partition the data into a training set and a
+testing set.  The training set is the data that was used to train the models on.
+Once the best method to use was determined, that method was applied to the testing
+set.
+
+```{r}
+inTrain <- createDataPartition(y=traindata$classe, p = 0.7, list = FALSE)
+training <- traindata[inTrain,]
+testing <- traindata[-inTrain,]
+dim(training)
+dim(testing)
+```
+
+The dimensions show that there were 160 columns (159 variables to consider).  Before
+proceeding, I took a look at the data.  There were numerous columns that would
+not be applicable for the analysis.  For example, the first 7 columns were related
+to things such as participant name, number, date, etc.  These variables would not
+be applicable to the question trying to be answered.  Next, I noticed that many
+of the columns were mostly unfilled with no data or had NA values.  These columns
+were also taken out of the data set.  This was the final data set that was worked with.
+New data sets were created using only the applicable columns for both the training
+and testing data.
+
+```{r}
+training <- training[,c(8:11,37:48, 60:68, 84:86, 102, 113:124, 140, 151:160)]
+testing <- testing[,c(8:11,37:48, 60:68, 84:86, 102, 113:124, 140, 151:160)]
+dim(training)
+dim(testing)
+```
+
+##Creating the models
+First, a classification tree was attempted.  The data was preprocessed and used
+3-fold cross validation.
+
+```{r}
+set.seed(4321)
+modelFitRPART <- train(classe ~ ., data = training, preProcess = c('center', 'scale'),
+                   trControl = trainControl(method = 'cv', number = 3), method = 'rpart')
+print(modelFitRPART)
+fancyRpartPlot(modelFitRPART$finalModel)
+confusionMatrix(training$classe, predict(modelFitRPART, training))
+```
+
+This resulted in only a 49% accuracy which was a bit disappointing.  It is also concerning that there is no path on the chart that will lead to category D.
+  
+Next, a random forrest method was attempted.  The data was preprocessed and used
+3-fold cross validation.
+```{r}
+set.seed(4321)
+modelFitRF <- train(classe ~ ., data = training, preProcess = c('center', 'scale'),
+                    trControl = trainControl(method = 'cv', number = 3), method = 'rf')
+print(modelFitRF)
+confusionMatrix(training$classe, predict(modelFitRF, training))
+```
+
+The random forrest method acheived much better results.  The accuracy for the training
+set was 100%.  This was a little alarming because it was so high, but in the end,
+I decided to just go with it and see what happened with the testing data (hoping that
+I would not have to scrap everything I had done and start over).  
+
+```{r}
+confusionMatrix(testing$classe, predict(modelFitRF, testing))
+```
+
+Luckily, the model worked very well with the testing data also, resulting in 
+99.37% accuracy.
+
+##Conclusion
+A model was built using the random forrest method to determine which of 5 ways a
+participant was performing barbbell lifts.  The estimated out of sample error is 
+0.63% (1 - testing accuracy).  Although the out of sample error is very low, we 
+would expect the actual error in real-life situations to be higher.
+  
+As a final step, I applied the prediction model to the testing data given to us
+which did result in full marks for the assignment:
+```{r}
+testdata <- testdata[,c(8:11,37:48, 60:68, 84:86, 102, 113:124, 140, 151:160)]
+predict(modelFitRF, testdata)
+```
